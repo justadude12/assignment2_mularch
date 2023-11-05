@@ -10,7 +10,14 @@ SCIPER		: Your SCIPER numbers
 #include <stdlib.h>
 #include "utility.h"
 
-int perform_bucket_computation(int, int, int);
+#define CACHE_LINE_SIZE 64
+
+typedef struct {
+    int value;
+    int* filler[(CACHE_LINE_SIZE / sizeof(int)) - 1];
+}PaddedInt;
+
+int perform_buckets_computation(int, int, int);
 
 int main (int argc, const char *argv[]) {
     int num_threads, num_samples, num_buckets;
@@ -28,16 +35,38 @@ int main (int argc, const char *argv[]) {
     perform_buckets_computation(num_threads, num_samples, num_buckets);
 
     printf("Using %d threads: %d operations completed in %.4gs.\n", num_threads, num_samples, elapsed_time());
+    //printf("%.4g\n", elapsed_time());
     return 0;
 }
 
 int perform_buckets_computation(int num_threads, int num_samples, int num_buckets) {
-    volatile int *histogram = (int*) calloc(num_buckets, sizeof(int));
-    rand_gen generator = init_rand();
-    for(int i = 0; i < num_samples; i++){
-        int val = next_rand(generator) * num_buckets;
-        histogram[val]++;
+    PaddedInt** histograms = (PaddedInt**)malloc(num_threads * sizeof(PaddedInt*));
+    for (int i = 0; i < num_threads; i++) {
+        histograms[i] = (PaddedInt*)calloc(num_buckets, sizeof(PaddedInt));
+        if (histograms[i] == NULL) {
+            return -1;
+        }
     }
-    free_rand(generator);
+    omp_set_num_threads(num_threads);
+    #pragma omp parallel
+    {
+        int thread = omp_get_thread_num();
+        rand_gen generator = init_rand();
+        #pragma omp for
+        for(int i = 0; i < num_samples; i++){
+            int val = next_rand(generator) * num_buckets;
+            histograms[thread][val].value++;
+        }
+        free_rand(generator);
+    }
+
+    PaddedInt* histogram = (PaddedInt*)calloc(num_buckets, sizeof(PaddedInt));
+    for(int i = 0; i < num_threads; i++) {
+        for(int j = 0; j < num_buckets; j++) {
+            histogram[j].value += histograms[i][j].value;
+        }
+        free(histograms[i]);
+    }
+    free(histograms);
     return 0;
 }
