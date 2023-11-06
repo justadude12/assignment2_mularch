@@ -1,8 +1,8 @@
 /*
 ============================================================================
-Filename    : pi.c
-Author      : Your names goes here
-SCIPER		: Your SCIPER numbers
+Filename    : sharing.c
+Author      : Vincent VENTURA, Hana EL MOUTAOUKIL
+SCIPER		: 302810, 340995
 ============================================================================
 */
 
